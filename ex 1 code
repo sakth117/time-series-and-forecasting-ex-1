@@ -1,0 +1,67 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import MinMaxScaler
+
+# Step 1: Load the Data
+url = "D:/python/time-series-19-covid-combined.csv" # Example dataset URL
+data = pd.read_csv(url)
+
+# Step 2: Inspect the Data
+print("Data Information:")
+print(data.info())
+print("First few rows:")
+print(data.head())
+
+# Step 3: Data Cleaning
+# Drop duplicates
+data = data.drop_duplicates()
+
+# Check for missing values and fill if necessary
+data = data.fillna(method='ffill')
+
+# Convert the date column to datetime format
+data['Date'] = pd.to_datetime(data['Date'])
+
+# Step 4: Handle Outliers (IQR method)
+def handle_outliers(df, column):
+    Q1 = df[column].quantile(0.25)
+    Q3 = df[column].quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    return np.clip(df[column], lower_bound, upper_bound)
+
+for col in ['Confirmed', 'Recovered', 'Deaths']:
+    data[col] = handle_outliers(data, col)
+
+# Step 5: Preprocessing
+# Resample data to weekly frequency
+data.set_index('Date', inplace=True)
+weekly_data = data.resample('W').sum().reset_index()
+
+# Add a 7-day rolling average for confirmed cases
+data['Confirmed_7day_avg'] = data['Confirmed'].rolling(window=7).mean()
+
+# Normalize data using MinMaxScaler
+scaler = MinMaxScaler()
+data[['Confirmed', 'Recovered', 'Deaths']] = scaler.fit_transform(data[['Confirmed', 'Recovered', 'Deaths']])
+
+# Step 6: Data Visualization
+plt.figure(figsize=(12, 6))
+sns.lineplot(data=data, x='Date', y='Confirmed', label='Confirmed Cases')
+sns.lineplot(data=data, x='Date', y='Deaths', label='Deaths')
+sns.lineplot(data=data, x='Date', y='Recovered', label='Recovered')
+plt.title('COVID-19 Trends Over Time')
+plt.xlabel('Date')
+plt.ylabel('Normalized Values')
+plt.legend()
+plt.show()
+
+# Step 7: Save Cleaned Data
+data.reset_index(inplace=True)
+data.to_csv('cleaned_covid19_data.csv', index=False)
+
+print("Cleaned data saved to 'cleaned_covid19_data.csv'.")
+
